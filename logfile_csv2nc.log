@@ -1,0 +1,1 @@
+INFO: csv2nc.py has been run successfully ! AEMET radiation data in csv format were transformed to netCDF format. The output files are located at /home/swen/datos/tareas/proyectos/pticlima/radiation/netcdf
