@@ -1,2 +1,2 @@
 # pySolar
-Validates model or satellite radition datasets againts in-situ station data
+Validates model or satellite solar radition datasets againts in-situ station data
