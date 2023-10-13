@@ -33,7 +33,7 @@ def get_xr_arr(np_arr_f, coords_f, varname_f, longname_f, units_f, altitude_f, s
 
 
 def get_nc_path(years_f,region_f,dir_f,variable_f):
-    '''loads ERA5-Land data from local diks. Input: year_f = a numpy array containing a list of years to be loaded; region_f = string with a label referring to the geographical area to be loaded;
+    '''Loads ERA5-Land data from local diks. Input: year_f = a numpy array containing a list of years to be loaded; region_f = string with a label referring to the geographical area to be loaded;
     dir_f = string, basic path to the files which will be extended by the function; variable_f = string, name of the variable as provided in the input nc files. Output: get_nc_path = list of 
     nc files to be loaded.'''
     #get list of full paths of nc dataset to be tested; sp = Spain, ca = Canaries
@@ -55,3 +55,56 @@ def get_nc_path(years_f,region_f,dir_f,variable_f):
     #delete non nc files from the lists and sort the individual filenames in ascending temporal order
     listdir_f = sorted(np.delete(listdir_f,dropind_f).tolist())
     return(listdir_f)
+
+def add_location_metadata(xr_ds_f,xr_arr_obs_f,xr_arr_mod_f):
+    '''Adds location metadata to xarray dataset xr_ds_f containing various validation scores. The metadata is taken from the xr DataArrays xr_arr_obs_f and xr_arr_mod_f'''
+    #assgin location attibutes
+    xr_ds_f.location.attrs['standard_name'] = 'location index'
+    xr_ds_f.location.attrs['long_name'] = 'index of the station location'
+    xr_ds_f.location.attrs['altitude_obs'] = xr_arr_obs_f.location.altitude
+    xr_ds_f.location.attrs['station_name'] = xr_arr_obs_f.location.station_name
+    xr_ds_f.location.attrs['aemet_code'] = xr_arr_obs_f.location.aemet_code
+    xr_ds_f.location.attrs['latitude_obs'] = xr_arr_obs_f.location.latitude
+    xr_ds_f.location.attrs['longitude_obs'] = xr_arr_obs_f.location.longitude
+    xr_ds_f.location.attrs['latitude_nn'] = xr_arr_mod_f.location.latitude
+    xr_ds_f.location.attrs['longitude_nn'] = xr_arr_mod_f.location.longitude
+    xr_ds_f.location.attrs['altidue_nn'] = xr_arr_mod_f.location.altitude
+    xr_ds_f.location.attrs['info'] = 'obs and nn refer to observations and nearest neighbour model or reanalysis data, respectively.'
+    return(xr_ds_f)
+    
+def add_season_metadata(xr_ds_f,months_f,months_labels_f):
+    '''Adds season metadata to xarray dataset xr_ds_f containing various validation scores. The metadata is taken from the lists months_f and months_labels_f'''
+    #assign season attributes
+    xr_ds_f.season.attrs['standard_name'] = 'season index'  
+    xr_ds_f.season.attrs['long_name'] = 'index of season'
+    xr_ds_f.season.attrs['monhts'] = months
+    xr_ds_f.season.attrs['season_label'] = months_labels
+    return(xr_ds_f)
+
+def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
+    '''Plots matrix of the verfication results contained in xarray dataset <xr_ds_f>, indicated by the string <score_f>. Seasons are plotted on the x axis, stations on the y axis.'''
+    #set min and max values as a function of the score to be plotted
+    if score_f in ('pearson_r','spearman_r'):
+        minval_f = 0
+        maxval_f = 1
+    else:
+        raise Excpetion('ERROR: check entry of <score_f> input parameter in the function plot_pcolormesh() !')
+    
+    fig = plt.figure()
+    ax = xr_ds_f[score_f].plot.pcolormesh(cmap = colormap_f, x = 'season', y = 'location', vmin = minval_f, vmax = maxval_f, add_colorbar=False)
+    ax.axes.set_yticks(xr_ds_f.location.values)
+    ax.axes.set_yticklabels(xr_ds_f.location.station_name,fontsize=4)
+    ax.axes.set_xticks(xr_ds_f.season.values)
+    ax.axes.set_xticklabels(xr_ds_f.season.season_label,fontsize=2, rotation = 45.)
+    ax.axes.set_aspect('auto')
+    plt.xticks(fontsize=5)
+    plt.xlabel(None)
+    plt.ylabel(None)
+    cbar = plt.colorbar(ax,shrink=0.5,label=xr_ds_f[score_f].name + ' ('+xr_ds_f[score_f].units+')', orientation = 'horizontal')
+    cbar.ax.tick_params(labelsize=6)
+    fig.tight_layout()
+    if figformat == 'pdf': #needed to account for irregular behaviour with the alpha parameter when plotting a pdf file
+       #fig.set_rasterized(True)
+       print('Info: There is a problem with the aplha parameter when generating the figure on my local system. Correct this in future versions !')
+    plt.savefig(savename_f,dpi=dpival_f)
+    plt.close('all')

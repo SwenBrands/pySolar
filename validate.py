@@ -74,58 +74,38 @@ for mm in np.arange(len(months)):
     pearson_r[mm,:] = xs.pearson_r(obs_m,mod_m,dim='time',skipna=True).rename('pearson_r')
     pearson_pval[mm,:] = xs.pearson_r_p_value(obs_m,mod_m,dim='time',skipna=True).rename('pearson_pval')
     pearson_pval_effn[mm,:] = xs.pearson_r_eff_p_value(obs_m,mod_m,dim='time',skipna=True).rename('pearson_pval_effn')
-    spearman_r[mm,:] = xs.spearman_r(obs,obs,dim='time',skipna=True).rename('spearman_r')
+    spearman_r[mm,:] = xs.spearman_r(obs_m,mod_m,dim='time',skipna=True).rename('spearman_r')
     spearman_pval[mm,:] = xs.spearman_r_p_value(obs_m,mod_m,dim='time',skipna=True).rename('spearman_pval')
     spearman_pval_effn[mm,:] = xs.spearman_r_eff_p_value(obs_m,mod_m,dim='time',skipna=True).rename('spearman_pval_effn')
 
 ##pack results of all metrics into a single xarray dataset containing 3d data arrays (seasons x metrics x stations)
 ##do this by joining separate xarray data arrays obtained from the numpy arrays into a single dataset
 pearson_r = xr.DataArray(data=pearson_r, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'pearson_r')
-pearson_pval = xr.DataArray(data=pearson_pval, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'pearson_pval')
-#pearson_r = xr.DataArray(data=pearson_r, coords = [months_labels,np.arange(obs.shape[1])], dims = ['season','location'],name = 'pearson_r')
-#pearson_pval = xr.DataArray(data=pearson_pval, coords = [months_labels,np.arange(obs.shape[1])], dims = ['season','location'],name = 'pearson_pval')
+pearson_pval_effn = xr.DataArray(data=pearson_pval_effn, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'pearson_pval_effn')
 pearson_r.attrs['units'] = 'dimensionless'
-pearson_pval.attrs['units'] = 'probability'
-results = xr.merge((pearson_r,pearson_pval)) #merge into a single xr dataset
+pearson_pval_effn.attrs['units'] = 'probability'
 
-#location attibutes
-results.location.attrs['standard_name'] = 'location index'
-results.location.attrs['long_name'] = 'index of the station location'
-results.location.attrs['altitude_obs'] = obs.location.altitude
-results.location.attrs['station_name'] = obs.location.station_name
-results.location.attrs['aemet_code'] = obs.location.aemet_code
-results.location.attrs['latitude_obs'] = obs.location.latitude
-results.location.attrs['longitude_obs'] = obs.location.longitude
-results.location.attrs['latitude_nn'] = mod.location.latitude
-results.location.attrs['longitude_nn'] = mod.location.longitude
-results.location.attrs['altidue_nn'] = mod.location.altitude
-results.location.attrs['info'] = 'obs and nn refer to observations and nearest neighbour model or reanalysis data, respectively.'
+spearman_r = xr.DataArray(data=spearman_r, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'spearman_r')
+spearman_pval_effn = xr.DataArray(data=spearman_pval_effn, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'spearman_pval_effn')
+spearman_r.attrs['units'] = 'dimensionless'
+spearman_pval_effn.attrs['units'] = 'probability'
 
-#season attributes
-results.season.attrs['standard_name'] = 'season index'
-results.season.attrs['long_name'] = 'index of season'
-results.season.attrs['monhts'] = months
-results.season.attrs['season_label'] = months_labels
+results = xr.merge((pearson_r,pearson_pval_effn,spearman_r,spearman_pval_effn)) #merge into a single xr dataset
 
-##plot the matrix of daily files (time x location)
-fig = plt.figure()
-ax = results.pearson_r.plot.pcolormesh(cmap = colormap, x = 'season', y = 'location', vmin = 0, vmax = 1, add_colorbar=False)
-ax.axes.set_yticks(results.location.values)
-ax.axes.set_yticklabels(results.location.station_name,fontsize=2)
-ax.axes.set_xticks(results.season.values)
-ax.axes.set_xticklabels(results.season.season_label,fontsize=2, rotation = 45.)
-plt.xticks(fontsize=5)
-plt.xlabel(None)
-cbar = plt.colorbar(ax,shrink=0.5,label=pearson_r.name + ' ('+results.pearson_r.units+')')
-if figformat == 'pdf': #needed to account for irregular behaviour with the alpha parameter when plotting a pdf file
-   #fig.set_rasterized(True)
-   print('Info: There is a problem with the aplha parameter when generating the figure on my local system. Correct this in future versions !')
+##add location and seasons attibutes
+results = add_location_metadata(results,obs,mod)
+results = add_season_metadata(results,months,months_labels)
+
+##plot matrices of verification results for the distinct score (x-axis = seasons, y-axis = stations
 start_time = str(dates.min()).replace('-','').replace(' ','').replace(':','')[0:-6]
 end_time = str(dates.max()).replace('-','').replace(' ','').replace(':','')[0:-6]
-savename = dir_figs+'/pearson_r_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
-plt.savefig(savename,dpi=dpival)
-plt.close('all')
+savename_pears = dir_figs+'/pearson_r_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
+savename_spear = dir_figs+'/spearman_r_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
+plot_pcolormesh(results,'pearson_r',savename_pears,colormap,dpival)
+plot_pcolormesh(results,'spearman_r',savename_spear,colormap,dpival)
 
+#close input nc files and produced xr dataset
 nc_obs.close()
 nc_mod.close()
+results.close()
 print('INFO: validate.py has been run successfully !')

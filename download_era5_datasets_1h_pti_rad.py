@@ -3,17 +3,25 @@ import numpy as np
 import os
 c = cdsapi.Client()
 
+dataset = 'era5' #era5_land or era5
 startyears = list(range(2017,2023,1))
 #startyears = [2017]
 months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 endyears = np.copy(startyears) #currently not in use hereafter
 varalias = "ssrd" #t2m,rsds and psl
 region = 'Spain'
-tardir = '/media/swen/ext_disk2/datos/OBSdata/era5_land/'+region+'/hour/'+varalias
+#tardir = '/media/swen/ext_disk2/datos/OBSdata/'+dataset+'/'+region+'/hour/'+varalias
+tardir = '/home/swen/datos/OBSdata/'+dataset+'/'+region+'/hour/'+varalias
 fileformat = 'netcdf' #netcdf or netcdf.zip
-#tardir = '/home/swen/datos/OBSData/era5_land/1h'
 
 ## EXECUTE #############################################################
+if dataset == 'era5_land':
+    dataset_cds = 'reanalysis-era5-land'
+elif dataset == 'era5':
+    dataset_cds =  'reanalysis-era5-single-levels'
+else:
+    raise Excpetion('ERROR: check entry for <dataset> input parameter !')
+
 if fileformat == 'netcdf':
     file_ending = 'nc'
 elif fileformat == 'netcdf.zip':
@@ -43,11 +51,12 @@ for yy in np.arange(len(startyears)):
         os.makedirs(tardir+'/'+str(startyears[yy]))#create target directory if missing
 
     for mm in np.arange(len(months)):
-        print('INFO: Requesting ERA5-Land data for '+region+', year '+str(startyears[yy])+' and month '+months[mm])
+        print('INFO: Requesting hourly '+dataset_cds+' data for '+region+', year '+str(startyears[yy])+' and month '+months[mm])
         c.retrieve(
-            'reanalysis-era5-land',
+            dataset_cds,
             {
                 'variable': variable,
+                'product_type': 'reanalysis', #remove this line for ERA5-Land download
                 'year': str(startyears[yy]),
                 'month': months[mm],
                 'day': [
@@ -76,6 +85,6 @@ for yy in np.arange(len(startyears)):
                 'area': domain,
                 'format': fileformat, #netcdf.zip is recommended
             },
-            tardir+'/'+str(startyears[yy])+'/era5_land_1h_'+varalias+'_'+region+'_'+str(startyears[yy])+str(months[mm])+'.'+file_ending)
+            tardir+'/'+str(startyears[yy])+'/'+dataset+'_1h_'+varalias+'_'+region+'_'+str(startyears[yy])+str(months[mm])+'.'+file_ending)
 
-print('INFO: downloadme_era5_land_1h_pti_rad.py has been run successfully!')
+print('INFO: download_era5_datasets_1h_pti_rad.py has been run successfully!')
