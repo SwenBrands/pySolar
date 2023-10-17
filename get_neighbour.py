@@ -48,14 +48,27 @@ print(listdir_sp)
 nc_ca = xr.open_mfdataset(listdir_ca)
 nc_sp = xr.open_mfdataset(listdir_sp)
 
-#transform hourly ERA5-Land data to from Joule/m^2 per day to W/m^2 per second and rename to rsds, https://confluence.ecmwf.int/pages/viewpage.action?pageId=155337784
-nc_sp[variable]=nc_sp[variable]/3600
-nc_ca[variable]=nc_ca[variable]/3600
+#create pandas Datetime indices
+dates_sp = pd.DatetimeIndex(nc_sp.time.values)
+dates_ca = pd.DatetimeIndex(nc_ca.time.values)
+
+#get 00 UTC value for each day, containing the accumlated value of the prior 24 hours in ERA5-Land, then transform toe W/m^2, see https://confluence.ecmwf.int/pages/viewpage.action?pageId=197702790 and https://confluence.ecmwf.int/pages/viewpage.action?pageId=155337784
+acc_ind_sp = np.where(dates_sp.hour == 0)[0]
+acc_ind_ca = np.where(dates_ca.hour == 0)[0]
+nc_sp = nc_sp.isel(time=acc_ind_sp)/86400
+nc_ca = nc_ca.isel(time=acc_ind_ca)/86400
+#create pandas Datetime indices and shift by one day backward to tack into account the daily accumulation period in case of ERA5-Land (the 00 UTC value at date t contains the 24 hour flux accumlation of the day before, i.e. t-1 day)
+dates_sp = pd.DatetimeIndex(nc_sp.time.values).shift(-1,'D')
+dates_ca = pd.DatetimeIndex(nc_ca.time.values).shift(-1,'D')
+#redefine time dimension and variable name
+nc_sp['time'] = dates_sp
+nc_ca['time'] = dates_ca
 nc_sp = nc_sp[variable].rename(variable_aemet)
 nc_ca = nc_ca[variable].rename(variable_aemet)
-#cacluate daily mean values
-nc_ca = nc_ca.resample(time="D").mean(dim="time")
-nc_sp = nc_sp.resample(time="D").mean(dim="time")
+
+# #cacluate daily mean values
+# nc_ca = nc_ca.resample(time="D").mean(dim="time")
+# nc_sp = nc_sp.resample(time="D").mean(dim="time")
 
 #load AEMET station data and corresponding metadata
 obsfile = dir_obs+'/'+filename_obs
@@ -65,25 +78,22 @@ station_name = nc_obs.rsds.location.station_name
 aemet_code = nc_obs.rsds.location.aemet_code
 lat_obs = nc_obs.rsds.location.latitude
 lon_obs = nc_obs.rsds.location.longitude
-
-#create pandas Datetime indices and retain commmon period
-dates_sp = pd.DatetimeIndex(nc_sp.time.values)
-dates_ca = pd.DatetimeIndex(nc_ca.time.values)
 dates_obs = pd.DatetimeIndex(nc_obs.time.values)
 
-#check whether reanalysis dates are identical, if yes, use only one date object thereafter (dates_rean)
+#check whether reanalysis dates for the 2 regions (Spain and Canaries) are identical, if yes, use only one date object thereafter (dates_rean)
 if np.all(dates_sp.isin(dates_ca)) != True:
     raise Exception('ERROR: Reanalysis dates for the two regions SP and CA are not identical !')
 dates_rean = dates_sp
 del(dates_sp,dates_ca)
 
 #get common time period
-ind_dates_rean = dates_rean.isin(dates_obs)
-ind_dates_obs = dates_obs.isin(dates_rean)
+ind_dates_rean = np.where(dates_rean.isin(dates_obs))[0]
+ind_dates_obs = np.where(dates_obs.isin(dates_rean))[0]
 nc_sp = nc_sp[ind_dates_rean]
 nc_ca = nc_ca[ind_dates_rean]
 dates_rean = dates_rean[ind_dates_rean]
-nc_obs[variable_aemet] = nc_obs.rsds[ind_dates_obs]
+#nc_obs[variable_aemet] = nc_obs.rsds[ind_dates_obs]
+nc_obs = nc_obs.isel(time=ind_dates_obs)
 dates_obs = dates_obs[ind_dates_obs]
 nc_sp.values
 nc_ca.values
@@ -95,12 +105,6 @@ lon_sp = nc_sp.longitude.values
 lat_ca = nc_ca.latitude.values
 lon_ca = nc_ca.longitude.values
 
-# dist_sp = np.zeros((len(station_name),len(lon_sp),len(lat_sp)))
-# for st in np.arange(len(station_name)):
-    # for xx in np.arange(len(lon_sp)):
-        # for yy in np.arange(len(lat_sp)):
-            # dist_sp[st,xx,yy] = haversine(lon_obs[st], lat_obs[st], lon_sp[xx], lat_sp[yy])
-        
 #get nearest neighbour values (neighs) from reanalysis
 nanmask_sp = np.transpose(np.isnan(nc_sp.values).sum(axis=0)/nc_sp.values.shape[0])
 nanmask_ca = np.transpose(np.isnan(nc_ca.values).sum(axis=0)/nc_ca.values.shape[0])

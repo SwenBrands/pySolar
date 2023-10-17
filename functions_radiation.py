@@ -87,6 +87,12 @@ def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
     if score_f in ('pearson_r','spearman_r'):
         minval_f = 0
         maxval_f = 1
+    elif score_f in ('bias'):
+        maxval_f = np.abs(xr_ds_f[score_f]).max().values
+        minval_f = maxval_f*-1.
+    elif score_f in ('mae','rmse'):
+        maxval_f = xr_ds_f[score_f].max().values
+        minval_f = xr_ds_f[score_f].min().values
     else:
         raise Excpetion('ERROR: check entry of <score_f> input parameter in the function plot_pcolormesh() !')
     
@@ -108,3 +114,43 @@ def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
        print('Info: There is a problem with the aplha parameter when generating the figure on my local system. Correct this in future versions !')
     plt.savefig(savename_f,dpi=dpival_f)
     plt.close('all')
+
+def disaggregate_rean(xr_ds_f,variable_f):
+    #disaggregate ERA5-Land data from accumulations from 0 UTC to hour indicated in the file to hour-to-hour accumulations (i.e. from 23 to 0, 0 to 1, 1 to 2 UTC etc.)
+    np_arr_f = np.zeros(xr_ds_f[variable_f].shape) #get numpy array with dimensions of xr data array containing the accumulated rean. data; will be filled below
+    np_arr_f[:] = np.nan
+    dates_f = pd.DatetimeIndex(xr_ds_f.time.values)
+    hours_unique_f = np.unique(dates_f.hour.values) #get unique hours
+    xr_arr_f = xr_ds_f[variable]
+    for hh in np.arange(len(hours_unique_f)): #loop through every hour
+        print('INFO: disaggregating hourly data for '+str(hours_unique_f[hh])+' UTC...')
+        hourind_f = np.where(dates_f.hour.values == hours_unique_f[hh])[0] #find index for the hour in the non-lagged DatetimeIndex
+        hourind_lag1_f = hourind_f-1 #define lagged indices
+        if hours_unique_f[hh] == 0:
+            hourind_f = np.delete(hourind_f,0)
+            hourind_lag1_f = np.delete(hourind_lag1_f,0)
+            fillval_f = xr_arr_f.isel(time=hourind_f).values - xr_arr_f.isel(time=hourind_lag1_f).values
+        elif hours_unique_f[hh] == 1:
+            fillval_f = xr_arr_f.isel(time=hourind_f).values
+        else:
+            fillval_f = xr_arr_f.isel(time=hourind_f).values - xr_arr_f.isel(time=hourind_lag1_f).values
+        np_arr_f[hourind_f,:,:] = fillval_f
+        np_arr_f[np_arr_f < 0 ] = 0.
+    
+    #nc_ca_orig = nc_ca.copy(deep=True) # make a copy of the original aggegeated xr data array
+    xr_ds_f[variable_f][:] = np_arr_f #replace values in aggreget xr data array with disaggregated values
+    return(xr_ds_f)
+    
+    # xr_ds_da_f = xr_ds_f.copy() #da for disaggregated
+    # xr_ds_da_f[variable_f][:] = np.nan #set complete data array within to nan
+    # dates_f = pd.DatetimeIndex(xr_ds_f.time.values)
+    # hours_unique_f = np.unique(dates_f.hour.values) #get unique hours
+    # hours_unique_shifted_f = [hours_unique_f[-1]]+list(hours_unique_f)[0:-1] #get unique hours shifted by t-1 to get hourly accumulations from t-1 to 1
+    # for hh in np.arange(len(hours_unique_f)): #loop through every hour
+        # print('INFO: disaggregating hourly data ending at '+str(hours_unique_f[hh])+' UTC...')
+        # hourind_f = np.where(dates_f.hour.values == hours_unique_f[hh])[0] #find index for the hour in non-lagged DatetimeIndex
+        # hourind_f = np.delete(hourind_f,0) #remove first entry which is not paired in hourind_lag1
+        # hourind_lag1_f = np.where(dates_f.hour.values == hours_unique_shifted_f[hh])[0] #find index for the hour in non-lagged DatetimeIndex
+        # hourind_lag1_f = np.delete(hourind_lag1_f,-1) #remove last entry which is not paired in hourind
+        # xr_ds_da_f[variable_f][hourind_f] = xr_ds_f[variable_f].isel(time=hourind_f).values - xr_ds_f[variable_f].isel(time=hourind_lag1_f).values
+    # return(xr_ds_da_f)
