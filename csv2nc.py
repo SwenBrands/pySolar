@@ -115,7 +115,6 @@ rsds.attrs['standard_name'] = 'rsds'
 rsds.attrs['long_name'] = 'surface_downwelling_shortwave_radiation'
 rsds.attrs['units'] = 'W*m-2'
 rsds.attrs['conversion_factor'] = 'rsds = RGLODIA*10000/86400'
-#rsds.attrs['conversion_factor'] = 'rsds = RGLODIA*10000/3600'
 rsds.attrs['source'] = 'This netCDF file contains rsds time series from AEMET provided by Santiago Begueria; rsds was obtained by multiplying the original RGLODIR variable with the factor indicated in the <conversion_factor> attribute.'
 rsds.attrs['nan_percentage'] = np.isnan(rsds.values).sum(axis=0)/rsds.shape[0]*100
 

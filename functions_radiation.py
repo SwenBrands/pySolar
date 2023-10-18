@@ -71,14 +71,16 @@ def add_location_metadata(xr_ds_f,xr_arr_obs_f,xr_arr_mod_f):
     xr_ds_f.location.attrs['altidue_nn'] = xr_arr_mod_f.location.altitude
     xr_ds_f.location.attrs['info'] = 'obs and nn refer to observations and nearest neighbour model or reanalysis data, respectively.'
     return(xr_ds_f)
+    xr_ds_f.close()
+    del xr_ds_f
     
 def add_season_metadata(xr_ds_f,months_f,months_labels_f):
     '''Adds season metadata to xarray dataset xr_ds_f containing various validation scores. The metadata is taken from the lists months_f and months_labels_f'''
     #assign season attributes
     xr_ds_f.season.attrs['standard_name'] = 'season index'  
     xr_ds_f.season.attrs['long_name'] = 'index of season'
-    xr_ds_f.season.attrs['monhts'] = months
     xr_ds_f.season.attrs['season_label'] = months_labels
+    #xr_ds_f.season.attrs['months'] = months #multi-dimensional array attributes are not supported and <months> has 2 dimensions. This is why this line is commented.
     return(xr_ds_f)
 
 def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
@@ -87,10 +89,10 @@ def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
     if score_f in ('pearson_r','spearman_r'):
         minval_f = 0
         maxval_f = 1
-    elif score_f in ('bias'):
+    elif score_f in ('bias','relbias'):
         maxval_f = np.abs(xr_ds_f[score_f]).max().values
         minval_f = maxval_f*-1.
-    elif score_f in ('mae','rmse'):
+    elif score_f in ('rmse','mae','mape'):
         maxval_f = xr_ds_f[score_f].max().values
         minval_f = xr_ds_f[score_f].min().values
     else:

@@ -28,6 +28,9 @@ dir_figs = home+'/datos/tareas/proyectos/pticlima/radiation/figs/validation' #pa
 filename_obs = 'rsds_day_aemet_20171201_20221231.nc'
 filename_mod = 'rsds_day_'+model_dataset+'_nn_aemet_20171201_20221230.nc'
 taryears = [2017,2022] #start and end years used for validation
+nr_valobs = 30 #minimum number of observations available for each station and season, if fewer observations are available, the corresponding row in the xr dataarray is set entirely to nan
+whisker_factor = 2. #factor to define the distance of the outlier threshold from the 25th and 75 percentile; 1.5 is the standard boxplot setting
+corr_outlier = 'yes' #apply outlier correction, yes or no
 
 #months = [[12,1,2],[3,4,5],[6,7,8],[9,10,11]] #list of lists containing single or several months
 #months_labels = ['DJF','MAM','JJA','SON']
@@ -39,8 +42,8 @@ variable_h = 'rsds' # "h" stands for "harmonized"; variable name after transform
 precision = 'float32' #precision of the variable in the output netCDF files
 dpival = 300 #resultion of the output figure in dpi
 figformat = 'pdf' #format of the output figures: pdf, png, etc.
-colormap_ascend = 'Spectral_r' #is set in functions_raditation.py as a function of the applied verification measure
-colormap_div = 'seismic'
+colormap_ascend = 'Spectral_r' #ascendig colormap used for plotting: Spectral_r 
+colormap_div = 'seismic' #diverging (zero-centered) colormap used for plotting: seismic
 
 ##EXECUTE ##############################################################
 #create output directories ir they do not exist.
@@ -72,20 +75,49 @@ del(dates_obs,dates_mod)
 
 #init numpy array that will contain the monthly validation results at all stations
 pearson_r = np.zeros((len(months),obs.shape[1]))
+pearson_r[:] = np.nan
 pearson_pval = np.copy(pearson_r)
 pearson_pval_effn = np.copy(pearson_r)
 spearman_r = np.copy(pearson_r)
 spearman_pval = np.copy(pearson_r)
 spearman_pval_effn = np.copy(pearson_r)
 bias = np.copy(pearson_r)
+relbias = np.copy(pearson_r)
 mae = np.copy(pearson_r)
+mape = np.copy(pearson_r)
 rmse = np.copy(pearson_r)
 #fill these arrays with results
 for mm in np.arange(len(months)):
     print('INFO: starting validation for '+str(months[mm]))
     month_ind = np.where(np.isin(dates.month,months[mm]))[0]
-    obs_m = obs.isel(time=month_ind) #m stands for monthly or several months time series 
-    mod_m = mod.isel(time=month_ind)
+    obs_m = obs.isel(time=month_ind) #m stands for monthly or several months time series
+    #set entire row to nan for stations with too few valid observations
+    nanind = np.where(np.sum(~np.isnan(obs_m),axis=0) < nr_valobs)[0]
+    #print stations where too few observations are available
+    if len(nanind) > 0:
+        print('WARNING: In month '+str(months[mm])+', the number of valid observations ('+str(nr_valobs)+') is not reached at the following stations:')
+        print(list(np.array(obs.location.station_name)[nanind]))
+    obs_m[:,nanind] = np.nan
+    mod_m = mod.isel(time = month_ind)
+    
+    #correct outlier values
+    if corr_outlier == 'yes':
+        print('INFO: On request of the user, outliers will be detected and set to nan...')
+        prct25 = np.tile(np.nanpercentile(obs_m,25,axis=0),(obs_m.shape[0],1))
+        prct75 = np.tile(np.nanpercentile(obs_m,75,axis=0),(obs_m.shape[0],1))
+        lowerlim = prct25 - prct25*whisker_factor
+        upperlim = prct75 + prct75*whisker_factor
+        outind = np.where((obs_m > upperlim) | (obs_m < lowerlim))
+        if len(outind[0]) > 0:
+            print('WARNING: In month '+str(months[mm])+', outlier values are present in the observations which are set to nan !')
+        elif len(outind[0]) == 0:
+            print('INFO: In month '+str(months[mm])+', no outlier values have been detected in the observations.')
+        else:
+            raise Excpetion('ERROR: The size of <outind> is unexpected !')
+        obs_m[outind] = np.nan
+    else:
+        print('INFO: On request of the user, outliers will not be corrected !')
+    
     ##calculalate hindcast correlation coefficient for the inter-annual seasonal-mean time series (observations vs. ensemble mean) and corresponding p-values based on the effective sample size
     pearson_r[mm,:] = xs.pearson_r(obs_m,mod_m,dim='time',skipna=True).rename('pearson_r')
     pearson_pval[mm,:] = xs.pearson_r_p_value(obs_m,mod_m,dim='time',skipna=True).rename('pearson_pval')
@@ -93,9 +125,11 @@ for mm in np.arange(len(months)):
     spearman_r[mm,:] = xs.spearman_r(obs_m,mod_m,dim='time',skipna=True).rename('spearman_r')
     spearman_pval[mm,:] = xs.spearman_r_p_value(obs_m,mod_m,dim='time',skipna=True).rename('spearman_pval')
     spearman_pval_effn[mm,:] = xs.spearman_r_eff_p_value(obs_m,mod_m,dim='time',skipna=True).rename('spearman_pval_effn')
-    #calculate bias and rmse values, see https://xskillscore.readthedocs.io/en/stable/quick-start.html
+    #calculate bias, mae, mape and rmse values, see https://xskillscore.readthedocs.io/en/stable/quick-start.html
     bias[mm,:] = xs.me(obs_m,mod_m,dim='time',skipna=True).rename('bias') #in xskillscore the bias is referred to as "mean error" (me)
+    relbias[mm,:] = (bias[mm,:]/obs_m.mean(dim='time')*100).rename('relbias')
     mae[mm,:] = xs.mae(obs_m,mod_m,dim='time',skipna=True).rename('mae')
+    mape[mm,:] = xs.mape(obs_m,mod_m,dim='time',skipna=True).rename('mape')
     rmse[mm,:] = xs.rmse(obs_m,mod_m,dim='time',skipna=True).rename('rmse')
 
 ##pack results of all metrics into a single xarray dataset containing 3d data arrays (seasons x metrics x stations)
@@ -115,26 +149,49 @@ spearman_pval_effn.attrs['units'] = 'probability'
 bias = xr.DataArray(data=bias, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'bias')
 bias.attrs['units'] = nc_obs.rsds.units
 
+relbias = xr.DataArray(data=relbias, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'relbias')
+relbias.attrs['units'] = 'percent'
+
+mae = xr.DataArray(data=mae, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'mae')
+mae.attrs['units'] = nc_obs.rsds.units
+
+mape = xr.DataArray(data=mape, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'mape')
+mape.attrs['units'] = 'percent'
+
 rmse = xr.DataArray(data=rmse, coords = [np.arange(len(months)),np.arange(obs.shape[1])], dims = ['season','location'],name = 'rmse')
 rmse.attrs['units'] = nc_obs.rsds.units
 
-results = xr.merge((bias,rmse,pearson_r,pearson_pval_effn,spearman_r,spearman_pval_effn)) #merge into a single xr dataset
+results = xr.merge((bias,relbias,mae,mape,rmse,pearson_r,pearson_pval_effn,spearman_r,spearman_pval_effn)) #merge into a single xr dataset
 
 ##add location and seasons attibutes
 results = add_location_metadata(results,obs,mod)
 results = add_season_metadata(results,months,months_labels)
 
-##plot matrices of verification results for the distinct score (x-axis = seasons, y-axis = stations
+##plot matrices of verification results for the distinct score (x-axis = seasons, y-axis = stations and save to <figformat>
 start_time = str(dates.min()).replace('-','').replace(' ','').replace(':','')[0:-6]
 end_time = str(dates.max()).replace('-','').replace(' ','').replace(':','')[0:-6]
-savename_pears = dir_figs+'/pearson_r_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
-savename_spear = dir_figs+'/spearman_r_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
-savename_bias = dir_figs+'/bias_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
-savename_rmse = dir_figs+'/rmse_day_'+model_dataset+'_vs_aemet_'+start_time+'_'+end_time+'.'+figformat
+savename_pears = dir_figs+'/pearson_r_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
+savename_spear = dir_figs+'/spearman_r_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
+savename_bias = dir_figs+'/bias_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
+savename_relbias = dir_figs+'/relbias_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
+savename_mae = dir_figs+'/mae_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
+savename_mape = dir_figs+'/mape_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
+savename_rmse = dir_figs+'/rmse_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.'+figformat
 plot_pcolormesh(results,'pearson_r',savename_pears,colormap_ascend,dpival)
 plot_pcolormesh(results,'spearman_r',savename_spear,colormap_ascend,dpival)
 plot_pcolormesh(results,'bias',savename_bias,colormap_div,dpival)
+plot_pcolormesh(results,'relbias',savename_relbias,colormap_div,dpival)
+plot_pcolormesh(results,'mae',savename_mae,colormap_ascend,dpival)
+#plot_pcolormesh(results,'mape',savename_mape,colormap_ascend,dpival) #there is a problem with the mape, check in future versions of the script
 plot_pcolormesh(results,'rmse',savename_rmse,colormap_ascend,dpival)
+
+#add global attributres and save verification results in netCDF format
+results.attrs['minimum_nr_obs'] = 'Verfication metrics were only calculated if at least '+str(nr_valobs)+' observations were available in the csv file from AEMET at a given station during the respective season or month, as indicated in the <season_label> attribute.'
+if corr_outlier == 'yes':
+    results.attrs['outlier_correction'] = 'Outliers in observations were set to nan if they are located above the upper threshold U = 75th percentile + '+str(whisker_factor)+' x 75th percentile or below the lower threshold L = 25th percentile - '+str(whisker_factor)+' x 25th percentile; calculated separately for each station and season or month, as indicated in the <season_label> attribute.'
+results.attrs['contact'] = 'Swen Brands, brandssf@ifca.unican.es or swen.brands@gmail.com'
+savename_results = dir_netcdf+'/verification_results_day_'+model_dataset+'_vs_aemet_corroutlier_'+corr_outlier+'_'+start_time+'_'+end_time+'.nc'
+results.to_netcdf(savename_results)
 
 #close input nc files and produced xr dataset
 nc_obs.close()
