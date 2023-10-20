@@ -11,7 +11,7 @@ endyears = np.copy(startyears) #currently not in use hereafter
 varalias = "ssrd" #t2m,rsds and psl
 region = 'Canaries' #target region, either Spain or Canaries
 #tardir = '/media/swen/ext_disk2/datos/OBSdata/'+dataset+'/'+region+'/hour/'+varalias
-tardir = '/home/swen/datos/OBSdata/'+dataset+'/'+region+'/hour/'+varalias
+tardir = '/home/swen/datos/OBSData/'+dataset+'/'+region+'/hour/'+varalias
 fileformat = 'netcdf' #netcdf or netcdf.zip
 
 ## EXECUTE #############################################################

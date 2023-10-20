@@ -83,21 +83,9 @@ def add_season_metadata(xr_ds_f,months_f,months_labels_f):
     #xr_ds_f.season.attrs['months'] = months #multi-dimensional array attributes are not supported and <months> has 2 dimensions. This is why this line is commented.
     return(xr_ds_f)
 
-def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
+def plot_pcolormesh(xr_ds_f,score_f,minval_f,maxval_f,savename_f,colormap_f,dpival_f):
     '''Plots matrix of the verfication results contained in xarray dataset <xr_ds_f>, indicated by the string <score_f>. Seasons are plotted on the x axis, stations on the y axis.'''
-    #set min and max values as a function of the score to be plotted
-    if score_f in ('pearson_r','spearman_r'):
-        minval_f = 0
-        maxval_f = 1
-    elif score_f in ('bias','relbias'):
-        maxval_f = np.abs(xr_ds_f[score_f]).max().values
-        minval_f = maxval_f*-1.
-    elif score_f in ('rmse','mae','mape'):
-        maxval_f = xr_ds_f[score_f].max().values
-        minval_f = xr_ds_f[score_f].min().values
-    else:
-        raise Excpetion('ERROR: check entry of <score_f> input parameter in the function plot_pcolormesh() !')
-    
+
     fig = plt.figure()
     ax = xr_ds_f[score_f].plot.pcolormesh(cmap = colormap_f, x = 'season', y = 'location', vmin = minval_f, vmax = maxval_f, add_colorbar=False)
     ax.axes.set_yticks(xr_ds_f.location.values)
@@ -113,7 +101,7 @@ def plot_pcolormesh(xr_ds_f,score_f,savename_f,colormap_f,dpival_f):
     fig.tight_layout()
     if figformat == 'pdf': #needed to account for irregular behaviour with the alpha parameter when plotting a pdf file
        #fig.set_rasterized(True)
-       print('Info: There is a problem with the aplha parameter when generating the figure on my local system. Correct this in future versions !')
+       print('Info: There is a problem with the alpha parameter when generating the figure on my local system. Correct this in future versions !')
     plt.savefig(savename_f,dpi=dpival_f)
     plt.close('all')
 
