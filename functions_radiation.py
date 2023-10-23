@@ -130,17 +130,3 @@ def disaggregate_rean(xr_ds_f,variable_f):
     #nc_ca_orig = nc_ca.copy(deep=True) # make a copy of the original aggegeated xr data array
     xr_ds_f[variable_f][:] = np_arr_f #replace values in aggreget xr data array with disaggregated values
     return(xr_ds_f)
-    
-    # xr_ds_da_f = xr_ds_f.copy() #da for disaggregated
-    # xr_ds_da_f[variable_f][:] = np.nan #set complete data array within to nan
-    # dates_f = pd.DatetimeIndex(xr_ds_f.time.values)
-    # hours_unique_f = np.unique(dates_f.hour.values) #get unique hours
-    # hours_unique_shifted_f = [hours_unique_f[-1]]+list(hours_unique_f)[0:-1] #get unique hours shifted by t-1 to get hourly accumulations from t-1 to 1
-    # for hh in np.arange(len(hours_unique_f)): #loop through every hour
-        # print('INFO: disaggregating hourly data ending at '+str(hours_unique_f[hh])+' UTC...')
-        # hourind_f = np.where(dates_f.hour.values == hours_unique_f[hh])[0] #find index for the hour in non-lagged DatetimeIndex
-        # hourind_f = np.delete(hourind_f,0) #remove first entry which is not paired in hourind_lag1
-        # hourind_lag1_f = np.where(dates_f.hour.values == hours_unique_shifted_f[hh])[0] #find index for the hour in non-lagged DatetimeIndex
-        # hourind_lag1_f = np.delete(hourind_lag1_f,-1) #remove last entry which is not paired in hourind
-        # xr_ds_da_f[variable_f][hourind_f] = xr_ds_f[variable_f].isel(time=hourind_f).values - xr_ds_f[variable_f].isel(time=hourind_lag1_f).values
-    # return(xr_ds_da_f)
