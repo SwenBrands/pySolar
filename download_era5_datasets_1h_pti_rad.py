@@ -3,13 +3,13 @@ import numpy as np
 import os
 c = cdsapi.Client()
 
-dataset = 'era5' #era5_land or era5
-startyears = list(range(2017,2023,1))
-#startyears = [2017]
+dataset = 'era5_land' #era5_land or era5
+#startyears = list(range(1980,2023,1))
+startyears = list(range(1980,2017,1))
 months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 endyears = np.copy(startyears) #currently not in use hereafter
-varalias = "ssrd" #t2m,rsds and psl
-region = 'Canaries' #target region, either Spain or Canaries
+varalias = "ssrd" #t2m, ssrd and msl
+region = 'Spain' #target region, either Spain or Canaries
 #tardir = '/media/swen/ext_disk2/datos/OBSdata/'+dataset+'/'+region+'/hour/'+varalias
 tardir = '/home/swen/datos/OBSData/'+dataset+'/'+region+'/hour/'+varalias
 fileformat = 'netcdf' #netcdf or netcdf.zip
@@ -29,7 +29,7 @@ elif fileformat == 'netcdf.zip':
 else:
     raise Exception ('ERROR: unknown entry for <fileformat> input parameter !')
 
-if varalias == 'psl':
+if varalias == 'msl':
     variable = "mean_sea_level_pressure"
 elif varalias == 't2m':
     variable = '2m_temperature'

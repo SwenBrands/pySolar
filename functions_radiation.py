@@ -38,13 +38,17 @@ def get_nc_path(years_f,region_f,dir_f,variable_f):
     nc files to be loaded.'''
     #get list of full paths of nc dataset to be tested; sp = Spain, ca = Canaries
     listdir_f = []
-    for yy in np.arange(len(years_f)):
-        root_year_f = dir_f+'/'+region_f+'/hour/'+variable_f+'/'+str(years_f[yy])
-
+    if len(years_f.shape) == 0: #in case years_f is an interger containing a single year
+        root_year_f = dir_f+'/'+region_f+'/hour/'+variable_f+'/'+str(years_f)
         listdir_year = os.listdir(root_year_f)
         listdir_year_full = [root_year_f+'/'+listdir_year[ii] for ii in np.arange(len(listdir_year))] #contains the full path to the files
-       
         listdir_f = np.append(listdir_f,listdir_year_full,axis=0)
+    else: #in case years_f is an numpy.ndarray (test also with a list in the future) containing two or more years
+        for yy_f in np.arange(len(years_f)):
+            root_year_f = dir_f+'/'+region_f+'/hour/'+variable_f+'/'+str(years_f[yy_f])
+            listdir_year = os.listdir(root_year_f)
+            listdir_year_full = [root_year_f+'/'+listdir_year[ii] for ii in np.arange(len(listdir_year))] #contains the full path to the files           
+            listdir_f = np.append(listdir_f,listdir_year_full,axis=0)
 
     #remove all detected files that are not nc format from the lists to be loaded, just in case someone put other files into the directory
     dropind_f = []
