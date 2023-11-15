@@ -35,7 +35,7 @@ def get_xr_arr(np_arr_f, coords_f, varname_f, longname_f, units_f, altitude_f, s
 def get_nc_path(years_f,region_f,dir_f,variable_f):
     '''Loads ERA5-Land data from local diks. Input: year_f = a numpy array containing a list of years to be loaded; region_f = string with a label referring to the geographical area to be loaded;
     dir_f = string, basic path to the files which will be extended by the function; variable_f = string, name of the variable as provided in the input nc files. Output: get_nc_path = list of 
-    nc files to be loaded.'''
+    nc files to be loaded. Currently only works for hourly aggregation, so an <aggregation> parameter should be included in future versions'''
     #get list of full paths of nc dataset to be tested; sp = Spain, ca = Canaries
     listdir_f = []
     if len(years_f.shape) == 0: #in case years_f is an interger containing a single year
@@ -132,5 +132,5 @@ def disaggregate_rean(xr_ds_f,variable_f):
         np_arr_f[np_arr_f < 0 ] = 0.
     
     #nc_ca_orig = nc_ca.copy(deep=True) # make a copy of the original aggegeated xr data array
-    xr_ds_f[variable_f][:] = np_arr_f #replace values in aggreget xr data array with disaggregated values
+    xr_ds_f[variable_f][:] = np_arr_f #replace values in aggregated xr dataset with disaggregated values
     return(xr_ds_f)
