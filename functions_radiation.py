@@ -20,12 +20,12 @@ def get_xr_arr(np_arr_f, coords_f, varname_f, longname_f, units_f, altitude_f, s
     xr_arr_f.location.attrs['latitude'] = latitude_f
     xr_arr_f.location.attrs['longitude'] = longitude_f
     
-    #generate domain attribute to assign whether the station lies in Spain or on the Canary Islands
+    #generate domain attribute to assign whether the station lies in Iberia or on the Canary Islands
     domain_f = np.repeat('IB',len(latitude_f))
     canaries_ind = np.where((latitude_f < 30) & (longitude_f < -10))[0].tolist()
     domain_f[canaries_ind] = 'CA'
     xr_arr_f.location.attrs['domain'] = domain_f
-    xr_arr_f.location.attrs['info'] = 'IB refers to stations located in mainland Spain, Baleares and northern Africa. CA refers to stations located on the Canary Islands. Station altitude is in metres aboves sea level.'
+    xr_arr_f.location.attrs['info'] = 'IB refers to stations located in mainland Iberia, Baleares and northern Africa. CA refers to stations located on the Canary Islands. Station altitude is in metres aboves sea level.'
 
     xr_arr_f.attrs['source'] = source_f
     xr_arr_f.attrs['nan_percentage'] = np.isnan(np_arr_f).sum(axis=0)/np_arr_f.shape[0]*100
@@ -36,7 +36,7 @@ def get_nc_path(years_f,region_f,dir_f,variable_f):
     '''Loads ERA5-Land data from local diks. Input: year_f = a numpy array containing a list of years to be loaded; region_f = string with a label referring to the geographical area to be loaded;
     dir_f = string, basic path to the files which will be extended by the function; variable_f = string, name of the variable as provided in the input nc files. Output: get_nc_path = list of 
     nc files to be loaded. Currently only works for hourly aggregation, so an <aggregation> parameter should be included in future versions'''
-    #get list of full paths of nc dataset to be tested; sp = Spain, ca = Canaries
+    #get list of full paths of nc dataset to be tested; sp = Iberia, ca = Canarias
     listdir_f = []
     if len(years_f.shape) == 0: #in case years_f is an interger containing a single year
         root_year_f = dir_f+'/'+region_f+'/hour/'+variable_f+'/'+str(years_f)
@@ -109,8 +109,8 @@ def plot_pcolormesh(xr_ds_f,score_f,minval_f,maxval_f,savename_f,colormap_f,dpiv
     plt.savefig(savename_f,dpi=dpival_f)
     plt.close('all')
 
-def disaggregate_rean(xr_ds_f,variable_f):
-    #disaggregate ERA5-Land data from accumulations from 0 UTC to hour indicated in the file to hour-to-hour accumulations (i.e. from 23 to 0, 0 to 1, 1 to 2 UTC etc.)
+def disaggregate_rean(xr_ds_f,variable_f,accumulation_f):
+    '''disaggregates ERA5-Land data from accumulations from 0 UTC to hour indicated in the file to hour-to-hour accumulations (i.e. from 23 to 0, 0 to 1, 1 to 2 UTC etc.)'''
     np_arr_f = np.zeros(xr_ds_f[variable_f].shape) #get numpy array with dimensions of xr data array containing the accumulated rean. data; will be filled below
     np_arr_f[:] = np.nan
     dates_f = pd.DatetimeIndex(xr_ds_f.time.values)
@@ -133,4 +133,26 @@ def disaggregate_rean(xr_ds_f,variable_f):
     
     #nc_ca_orig = nc_ca.copy(deep=True) # make a copy of the original aggegeated xr data array
     xr_ds_f[variable_f][:] = np_arr_f #replace values in aggregated xr dataset with disaggregated values
+    
+    #define the accumulation method
+    if accumulation_f == 'forward':
+        print('As requested by the user, the data is accumulated '+accumulation_f+', i.e. the time instant in the output data array indicates the start of the accumulation period.')
+        xr_ds_f[variable_f] = xr_ds_f[variable_f].shift(time=-1)
+    elif accumulation_f == 'backward':
+        print('As requested by the user, the data is accumulated '+accumulation_f+', i.e. the time instant in the output data array indicates the end of the accumulation period.')
+    else:
+        raise Exception('ERROR: check entry for <accumulation_f> !') 
+        
     return(xr_ds_f)
+
+def clean_directory_content(directory_f):
+    '''Cleans the content of the specified directory <directory_f>, which is the only input parameter, the full path to the directory is needed. Output: none except print messages'''
+    listdir_f = os.listdir(directory_f)
+    if len(listdir_f) > 0:
+        print('The following previously generated files in '+directory_f+' will be removed:')
+        print(listdir_f)
+        print(' ')
+        [os.remove(listdir_f[ffi]) for ffi in np.arange(len(listdir_f))]
+    else:
+        print('The user requested '+directory_f+' to be cleaned but this folder is empty and is thus already clean.')
+        print(' ')
