@@ -30,7 +30,9 @@ taryears = [1980,2022] #start and end years used for disaggregation
 accumulation = 'forward' #forward or backward, the time instance indicated in the output netCDF files represents the start (forward) or end (backward) of the accumulation period
 variable = 'ssrd' #variable names are harmonized to ERA5 standard by csv2nc.py
 variable_unit = 'W/m2' #variable unit to be assigned to the output netCDF files
-domain = ['Canarias','Iberia'] #Iberia or Canarias
+domain = ['Iberia','Canarias'] #Iberia or Canarias
+hour_label = 'hour' #label of the hourly aggregation
+day_label = 'day' #label of the daily aggregation
 file_style = 'monthly' #temporal aggregation of the output netCDF files; monthly or yearly
 apply_validation = 'no' # the joint time series covering <taryears> will be evaluated after creation of the individual files, yes or no
 check_gridboxes = 30 #number of randomly chosen grid-boxes where the results of the joint time-series covering <taryears> will be checked
@@ -39,15 +41,25 @@ precision = 'float32' #precision of the variable in the output netCDF files
 dpival = 300 #resultion of the output figure in dpi
 figformat = 'pdf' #format of the output figures: pdf, png, etc.
 colormap = 'Spectral_r'
-clean_figdir = 'no' #clean the figure directory before execution, yes or no
+compression_level = 1
 
 ##EXECUTE ##############################################################
 os.chdir(rundir) #change path to working directory
+encoding = {variable: {'zlib': True, 'complevel': compression_level}}
 years = np.arange(taryears[0],taryears[1]+1) #generate np array of the considered individual years
 if len(years) > 15 and apply_validation == 'yes' and file_style == 'monthly':
     raise Exception('ERROR: The visualization part of this script is not able to open a very large amount of '+file_style+ ' files with xarray.open_mfdataset(). The script is thus stopped at this point. Please reduce the number of years in <taryears> or set <file_style = "yearly">.')
 
 #disaggregate 24-hour accumulations to W/m2. i.e. accumulations per second for each spatial domain in <domain>
+if accumulation == 'forward':
+    accum_meta_hour = 'Accumulated flux data per second (in '+variable_unit+') assumed to be constant from hour h to h+1 (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
+    accum_meta_day = 'Accumulated flux data per second (in '+variable_unit+') assumed to be constant from hour 00 to 24 UTC of day d, with d being indicated in the <time> dimension.'
+elif accumulation == 'backward':
+    accum_meta_hour = 'Accumulated flux data per second (in '+variable_unit+') assumed to be constant from hour h-1 to h (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
+    accum_meta_day = 'Accumulated flux data per second (in '+variable_unit+') assumed to be constant from hour 23 UTC of day d-1 to hour 23 UTC of day d, with d being indicated in the <time> dimension.'
+else:
+    raise Exception('Error: Unknown entry for input parameter named <accumulation> !')
+
 for do in np.arange(len(domain)):
     for yy in np.arange(len(years)):
         print('Disaggregating '+variable+' from '+model_dataset+' over '+domain[do]+' in '+str(years[yy])+'; '+file_style+' output files will be created...')
@@ -58,28 +70,23 @@ for do in np.arange(len(domain)):
         listdir = np.append(listdir,[path_jan_nextyear],axis=0) #add path of the January file of the next year at the end of the list
         print('The following files will be loaded for the '+domain[do]+' domain:')
         print(listdir)
-        nc = xr.open_mfdataset(listdir)
+        nc = xr.open_mfdataset(listdir) #nc contains hourly data
         nc[variable] = nc[variable].astype(precision) #set precision of the data variable
         nc_orig = nc.copy(deep=True) # make a copy of the original aggegeated xr data array
         nc = disaggregate_rean(nc,variable,accumulation) #disaggregates hourly data accumulated over 24 hours to hourly data accumulated over 1 hour, with time instants assigned to the end of the 1 hour accumulation period, i.e. the 02 UTC value contains the accumulation from 01 to 02 UTC.
         #filter out the time instances of the target year, i.e. the december entries of the previous year are discarded
-        dates = pd.DatetimeIndex(nc.time.values)
-        yearind = np.where(dates.year == years[yy])[0]
+        dates_hour = pd.DatetimeIndex(nc.time.values)
+        yearind = np.where(dates_hour.year == years[yy])[0]
         nc = nc.isel(time=yearind)
-        dates = dates[yearind]
+        dates_hour = dates_hour[yearind]
         #convert
         nc[variable] = nc[variable]/3600
         #add variable attributes
         nc[variable].attrs['standard_name'] = nc_orig[variable].standard_name
         nc[variable].attrs['long_name'] = nc_orig[variable].long_name
         nc[variable].attrs['units'] = variable_unit
-        if accumulation == 'backward':
-            accum_meta = 'Accumulated flux data per second (in '+variable_unit+') assumed to be constant from hour h-1 to h (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
-        elif accumulation == 'forward':
-            accum_meta = 'Accumulated flux data per second (in '+variable_unit+') assumed to be constant from hour h to h+1 (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
-        else:
-            raise Exception('Error: Unknown entry for input parameter named <accumulation> !')
-        nc[variable].attrs['temporal_aggregation'] = accum_meta
+        nc[variable].attrs['temporal_aggregation'] = accum_meta_hour
+        nc[variable].attrs['temporal_aggregation_short'] = accumulation
         nc[variable].attrs['source'] = model_dataset
         nc[variable].attrs['code'] = 'This file was generated with the pySolar package available at https://github.com/SwenBrands/pySolar'
         nc[variable].attrs['description'] = 'Accumulated flux data per second disaggregated from hourly '+model_dataset+' data obtained from CDS that was accumulated from 00 to 24 UTC for each day, see https://confluence.ecmwf.int/pages/viewpage.action?pageId=197702790'
@@ -89,30 +96,52 @@ for do in np.arange(len(domain)):
             raise Exception(model_dataset+' is not yet supported by this script')
         nc[variable].attrs['references'] = reference
         # add global attributes and save to netCDF
+        nc.attrs['compression_level'] = str(compression_level)
         nc.attrs['author'] = 'Swen Brands, brandssf@ifca.unican.es or swen.brands@gmail.com'
         nc.attrs['funding'] = 'This work is funded by the Ministry for the Ecological Transition and the Demographic Challenge (MITECO) and the European Commission NextGenerationEU (Regulation EU 2020/2094), through CSIC’s Interdisciplinary Thematic Platform Clima (PTI-Clima)'
+        
+        # calculate daily mean values, overwrite metadata and save to netCDF format
+        nc_day = nc.resample(time="24H").mean() #nc_day contains daily data
+        nc_day[variable].attrs['temporal_aggregation'] = accum_meta_day #overwrite detailed temporal aggregation metadata with the metadata generated above for daily values
+        dates_day = pd.DatetimeIndex(nc_day.time.values) #get DatetimeIndex for the daily data
+        
         if file_style == 'monthly': #create one file per month in yearly directories located in <dir_netcdf>
             #define yearly directory, check if it exists and create it if necessary
-            dir_year = dir_netcdf+'/'+domain[do]+'/hour/'+variable+'/'+str(years[yy])
-            if os.path.isdir(dir_year) != True:
-                os.makedirs(dir_year)
+            dir_year_hour = dir_netcdf+'/'+domain[do]+'/'+hour_label+'/'+variable+'/'+str(years[yy])
+            dir_year_day = dir_netcdf+'/'+domain[do]+'/'+day_label+'/'+variable+'/'+str(years[yy])
+            if os.path.isdir(dir_year_hour) != True:
+                os.makedirs(dir_year_hour)
+            if os.path.isdir(dir_year_day) != True:
+                os.makedirs(dir_year_day)
             #subset the yearly files for each month and store to netCDF
-            months = np.unique(dates.month)
+            months = np.unique(dates_hour.month)
             for mo in np.arange(len(months)):
                 print('Subsetting output netCDF data for month '+str(months[mo])+' and year '+str(years[yy])+'...')
-                monthind = np.where(dates.month == months[mo])[0]
-                nc_month = nc.isel(time=monthind)
-                start_date = str(nc_month.time.values[0]).replace('-','').replace(':','')[0:-14]
-                end_date = str(nc_month.time.values[-1]).replace('-','').replace(':','')[0:-14]
-                savename = dir_year+'/'+variable+'_1h_'+model_dataset+'_'+domain[do]+'_'+start_date+'_'+end_date+'.nc'
-                nc_month.to_netcdf(savename)
-                nc_month.close()
-                del(nc_month)
+                #process hourly data
+                monthind = np.where(dates_hour.month == months[mo])[0]
+                nc_month_hour = nc.isel(time=monthind)
+                start_date = str(nc_month_hour.time.values[0]).replace('-','').replace(':','')[0:-14]
+                end_date = str(nc_month_hour.time.values[-1]).replace('-','').replace(':','')[0:-14]
+                savename_hour = dir_year_hour+'/'+variable+'_'+hour_label+'_'+model_dataset+'_'+domain[do]+'_'+start_date+'_'+end_date+'.nc'
+                nc_month_hour.to_netcdf(savename_hour)
+                nc_month_hour.close()
+                del(nc_month_hour)
+                
+                #process daily data
+                monthind = np.where(dates_day.month == months[mo])[0]
+                nc_month_day = nc_day.isel(time=monthind)
+                start_date = str(nc_month_day.time.values[0]).replace('-','').replace(':','')[0:-14]
+                end_date = str(nc_month_day.time.values[-1]).replace('-','').replace(':','')[0:-14]
+                savename_day = dir_year_day+'/'+variable+'_'+hour_label+'_'+model_dataset+'_'+domain[do]+'_'+start_date+'_'+end_date+'.nc'
+                nc_month_day.to_netcdf(savename_day)
+                nc_month_day.close()
+                del(nc_month_day)
+
         elif file_style == 'yearly': #create one file per yearly directly in <dir_netcdf>
             start_date = str(nc.time.values[0]).replace('-','').replace(':','')[0:-14]
             end_date = str(nc.time.values[-1]).replace('-','').replace(':','')[0:-14]
-            savename = dir_netcdf+'/'+variable+'_1h_'+model_dataset+'_'+domain[do]+'_'+start_date+'_'+end_date+'.nc'
-            nc.to_netcdf(savename)
+            savename = dir_netcdf+'/'+variable+'_'+hour_label+'_'+model_dataset+'_'+domain[do]+'_'+start_date+'_'+end_date+'.nc'
+            nc.to_netcdf(savename,encoding=encoding)
         else:
             raise Excpetion('ERROR: check entry for <file_style> input parameter !')
         nc.close()
