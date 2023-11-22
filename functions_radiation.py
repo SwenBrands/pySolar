@@ -156,3 +156,12 @@ def clean_directory_content(directory_f):
     else:
         print('The user requested '+directory_f+' to be cleaned but this folder is empty and is thus already clean.')
         print(' ')
+
+def print_array_stats(xr_arr_f,text_f):
+    '''prints the nan percentage, min, max and mean values of the input xarray array <xr_arr_f>, preceded by a short text description contained in <text_f> to know what these arrays are about.'''
+    print(text_f)
+    print('NaN percentage: '+str(np.round(np.sum(np.isnan(xr_arr_f)).values/xr_arr_f.size*100,4)))
+    print('Minimum: '+str(np.round(xr_arr_f.min().values,2)))
+    print('Mean :'+str(np.round(xr_arr_f.mean().values,2)))
+    print('Maximum '+str(np.round(xr_arr_f.max().values,2)))
+    
