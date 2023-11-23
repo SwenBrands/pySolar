@@ -5,12 +5,12 @@ c = cdsapi.Client()
 
 dataset = 'era5_land' #era5_land or era5
 #startyears = list(range(1980,2023,1))
-startyears = [2023]
+startyears = [2022]
 #startyears = list(range(1980,2017,1))
-#months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
-months = ['01']
+months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+#months = ['01']
 endyears = np.copy(startyears) #currently not in use hereafter
-varalias = "ssrd" #t2m, ssrd and msl
+varalias = "tp" #t2m, ssrd, msl and tp
 region = 'Canarias' #target region, either Iberia or Canarias
 #tardir = '/media/swen/ext_disk2/datos/OBSdata/'+dataset+'/'+region+'/hour/'+varalias
 tardir = '/home/swen/datos/OBSData/'+dataset+'/'+region+'/hour/'+varalias
@@ -37,6 +37,8 @@ elif varalias == 't2m':
     variable = '2m_temperature'
 elif varalias == 'ssrd':
     variable = 'surface_solar_radiation_downwards'
+elif varalias == 'tp':
+    variable = 'total_precipitation'
 else:
     raise Exception('ERROR: unknown entry for <varalias>')
 

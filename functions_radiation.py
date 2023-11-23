@@ -32,20 +32,20 @@ def get_xr_arr(np_arr_f, coords_f, varname_f, longname_f, units_f, altitude_f, s
     return(xr_arr_f)
 
 
-def get_nc_path(years_f,region_f,dir_f,variable_f):
-    '''Loads ERA5-Land data from local diks. Input: year_f = a numpy array containing a list of years to be loaded; region_f = string with a label referring to the geographical area to be loaded;
-    dir_f = string, basic path to the files which will be extended by the function; variable_f = string, name of the variable as provided in the input nc files. Output: get_nc_path = list of 
+def get_nc_path(years_f,region_f,dir_f,timescale_f,variable_f):
+    '''Loads ERA5-Land data from local diks. Input: years_f = a numpy array containing a list of years to be loaded; region_f = string with a label referring to the geographical area to be loaded;
+    dir_f = string, basic path to the files which will be extended by the function; timescale_f = string, temporal aggregation of the files; variable_f = string, name of the variable as provided in the input nc files. Output: get_nc_path = list of 
     nc files to be loaded. Currently only works for hourly aggregation, so an <aggregation> parameter should be included in future versions'''
     #get list of full paths of nc dataset to be tested; sp = Iberia, ca = Canarias
     listdir_f = []
     if len(years_f.shape) == 0: #in case years_f is an interger containing a single year
-        root_year_f = dir_f+'/'+region_f+'/hour/'+variable_f+'/'+str(years_f)
+        root_year_f = dir_f+'/'+region_f+'/'+timescale_f+'/'+variable_f+'/'+str(years_f)
         listdir_year = os.listdir(root_year_f)
         listdir_year_full = [root_year_f+'/'+listdir_year[ii] for ii in np.arange(len(listdir_year))] #contains the full path to the files
         listdir_f = np.append(listdir_f,listdir_year_full,axis=0)
     else: #in case years_f is an numpy.ndarray (test also with a list in the future) containing two or more years
         for yy_f in np.arange(len(years_f)):
-            root_year_f = dir_f+'/'+region_f+'/hour/'+variable_f+'/'+str(years_f[yy_f])
+            root_year_f = dir_f+'/'+region_f+'/'+timescale_f+'/'+variable_f+'/'+str(years_f[yy_f])
             listdir_year = os.listdir(root_year_f)
             listdir_year_full = [root_year_f+'/'+listdir_year[ii] for ii in np.arange(len(listdir_year))] #contains the full path to the files           
             listdir_f = np.append(listdir_f,listdir_year_full,axis=0)
@@ -115,7 +115,7 @@ def disaggregate_rean(xr_ds_f,variable_f,accumulation_f):
     np_arr_f[:] = np.nan
     dates_f = pd.DatetimeIndex(xr_ds_f.time.values)
     hours_unique_f = np.unique(dates_f.hour.values) #get unique hours
-    xr_arr_f = xr_ds_f[variable]
+    xr_arr_f = xr_ds_f[variable_f]
     for hh in np.arange(len(hours_unique_f)): #loop through every hour
         print('INFO: disaggregating hourly data for '+str(hours_unique_f[hh])+' UTC...')
         hourind_f = np.where(dates_f.hour.values == hours_unique_f[hh])[0] #find index for the hour in the non-lagged DatetimeIndex
@@ -129,7 +129,11 @@ def disaggregate_rean(xr_ds_f,variable_f,accumulation_f):
         else:
             fillval_f = xr_arr_f.isel(time=hourind_f).values - xr_arr_f.isel(time=hourind_lag1_f).values
         np_arr_f[hourind_f,:,:] = fillval_f
-        np_arr_f[np_arr_f < 0 ] = 0.
+        ##set negative values to zero
+        neg_mask_f = np_arr_f < 0 
+        np_arr_f[neg_mask_f] = 0.
+        negvals_f = np.any(neg_mask_f)
+        del(neg_mask_f)
     
     #nc_ca_orig = nc_ca.copy(deep=True) # make a copy of the original aggegeated xr data array
     xr_ds_f[variable_f][:] = np_arr_f #replace values in aggregated xr dataset with disaggregated values
@@ -143,7 +147,7 @@ def disaggregate_rean(xr_ds_f,variable_f,accumulation_f):
     else:
         raise Exception('ERROR: check entry for <accumulation_f> !') 
         
-    return(xr_ds_f)
+    return(xr_ds_f,negvals_f)
 
 def clean_directory_content(directory_f):
     '''Cleans the content of the specified directory <directory_f>, which is the only input parameter, the full path to the directory is needed. Output: none except print messages'''
@@ -164,4 +168,61 @@ def print_array_stats(xr_arr_f,text_f):
     print('Minimum: '+str(np.round(xr_arr_f.min().values,2)))
     print('Mean :'+str(np.round(xr_arr_f.mean().values,2)))
     print('Maximum '+str(np.round(xr_arr_f.max().values,2)))
+
+def xr_ds_to_netcdf(xr_ds_hour_f,xr_ds_day_f,encoding_f,file_style_f,dir_hour_f,dir_day_f,file_hour_f,file_day_f):
+    '''saves hourly and daily data stored in <xr_ds_hour_f> and <xr_ds_day_f> to compressed netCDF files in year-to-year or month-to-month files (stored in yearly directories).'''
+    if file_style_f == 'yearly': #save to year-to-year files
+        #save hourly data
+        start_date_hour_f = str(xr_ds_hour_f.time.values[0]).replace('-','').replace(':','')[0:-14]
+        end_date_hour_f = str(xr_ds_hour_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+        savename_hour_f = dir_hour+'/'+file_hour+'_'+start_date_hour_f+'_'+end_date_hour_f+'.nc'
+        print('saving '+savename_hour_f)
+        xr_ds_hour_f.to_netcdf(savename_hour_f,encoding=encoding_f)
+        
+        #save daily data
+        start_date_day_f = str(xr_ds_day_f.time.values[0]).replace('-','').replace(':','')[0:-14]
+        end_date_day_f = str(xr_ds_day_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+        savename_day_f = dir_day+'/'+file_day+'_'+start_date_day_f+'_'+end_date_day_f+'.nc'
+        print('saving '+savename_day_f)
+        xr_ds_day_f.to_netcdf(savename_day_f,encoding=encoding_f)
+
+    elif file_style_f == 'monthly': #save month-to-month files in yearly directories
+        #define paths of the directories where the output netCDF data will be saved
+        dates_hour_f = pd.DatetimeIndex(xr_ds_hour_f.time)
+        dates_day_f = pd.DatetimeIndex(xr_ds_day_f.time)
+        year_f = np.unique(dates_day_f.year)
+        
+        #check whether the xarray dataset <xr_ds_day> contains only a single year as expected
+        if len(np.unique(np.array(year_f))) > 1:
+            raise Exception('ERROR: the xarray dataset <xr_ds_day> contains values for more than one year, but a single year is expected here !')
+
+        #save one netCDF file per month in directory named <year_f>
+        months_f = np.unique(dates_day_f.month)
+        for mo in np.arange(len(months_f)):
+            print('Subsetting output netCDF data for month '+str(months_f[mo])+' and year '+str(year_f)+'...')
+            #save hourly data
+            monthind_f = np.where(dates_hour_f.month == months_f[mo])[0]
+            nc_month_hour_f = xr_ds_hour_f.isel(time=monthind_f)
+            start_date_hour_f = str(nc_month_hour_f.time.values[0]).replace('-','').replace(':','')[0:-14]
+            end_date_hour_f = str(nc_month_hour_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+            savename_hour_f = dir_hour+'/'+file_hour+'_'+start_date_hour_f+'_'+end_date_hour_f+'.nc'
+            nc_month_hour_f.to_netcdf(savename_hour_f,encoding=encoding_f)
+            nc_month_hour_f.close()
+            del(nc_month_hour_f)
+                
+            #save daily data
+            monthind_f = np.where(dates_day_f.month == months_f[mo])[0]
+            nc_month_day_f = xr_ds_day_f.isel(time=monthind_f)
+            start_date_day_f = str(nc_month_day_f.time.values[0]).replace('-','').replace(':','')[0:-14]
+            end_date_day_f = str(nc_month_day_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+            savename_day_f = dir_day+'/'+file_day+'_'+start_date_day_f+'_'+end_date_day_f+'.nc'
+            nc_month_day_f.to_netcdf(savename_day_f,encoding=encoding_f)
+            nc_month_day_f.close()
+            del(nc_month_day_f)
+    else:
+        raise Exception('ERROR: unknown entry for <file_style_f> input parameter !')
+    
+    xr_ds_hour_f.close()
+    xr_ds_day_f.close()
+    del(xr_ds_hour_f,xr_ds_day_f)
     
