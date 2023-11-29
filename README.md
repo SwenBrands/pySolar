@@ -56,3 +56,9 @@ scripts contained in this folder.
 8. launchme.sh: bash script to launch the aforementioned Python scripts
 from the shell.
 
+
+Credits
+-------
+This research work was funded by the Ministry for the Ecological Transition and the Demographic Challenge (MITECO) and the European Commission NextGenerationEU (Regulation EU 2020/2094), through CSIC's Interdisciplinary Thematic Platform Clima (PTI-Clima).
+
+![alt text](https://www.miteco.gob.es/content/experience-fragments/miteco/language-masters/en/site/header/master-es/_jcr_content/root/header_container/logoImage.coreimg.svg/1693915329839/header-logo.svg)

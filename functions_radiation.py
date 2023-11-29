@@ -139,14 +139,21 @@ def disaggregate_rean(xr_ds_f,variable_f,accumulation_f):
     xr_ds_f[variable_f][:] = np_arr_f #replace values in aggregated xr dataset with disaggregated values
     
     #define the accumulation method
-    if accumulation_f == 'forward':
-        print('As requested by the user, the data is accumulated '+accumulation_f+', i.e. the time instant in the output data array indicates the start of the accumulation period.')
+    if accumulation_f in ('forward','centred','centered'):
         xr_ds_f[variable_f] = xr_ds_f[variable_f].shift(time=-1)
+        time_unit_f = 'hours since '+str(xr_ds_f.time[0].values) #set the time unit to be encoded
+        xr_ds_f.time.encoding['units'] = time_unit_f
+        if accumulation_f in ('centred','centered'):
+            print('As requested by the user, the disaggregated hourly data is '+accumulation_f+' around the time instant indicated in the time dimension (i.e. HH:30) and time bounds are added.')
+            xr_ds_f = center_dates(xr_ds_f,'hour') #hour is hardcoded here because disaggregate_rean() only works with hourly data, i.e. daily data would not be passed in the future. However, try to find a more robust solution in future versions of the function.
+        else:
+            print('As requested by the user, the data is accumulated '+accumulation_f+', i.e. the time instant in the output data array indicates the start of the accumulation period.')             
     elif accumulation_f == 'backward':
+        time_unit_f = 'hours since '+str(xr_ds_f.time[0].values) #set the time unit to be encoded
+        xr_ds_f.time.encoding['units'] = time_unit_f
         print('As requested by the user, the data is accumulated '+accumulation_f+', i.e. the time instant in the output data array indicates the end of the accumulation period.')
     else:
-        raise Exception('ERROR: check entry for <accumulation_f> !') 
-        
+        raise Exception('ERROR: check entry for <accumulation_f> !')
     return(xr_ds_f,negvals_f)
 
 def clean_directory_content(directory_f):
@@ -173,15 +180,15 @@ def xr_ds_to_netcdf(xr_ds_hour_f,xr_ds_day_f,encoding_f,file_style_f,dir_hour_f,
     '''saves hourly and daily data stored in <xr_ds_hour_f> and <xr_ds_day_f> to compressed netCDF files in year-to-year or month-to-month files (stored in yearly directories).'''
     if file_style_f == 'yearly': #save to year-to-year files
         #save hourly data
-        start_date_hour_f = str(xr_ds_hour_f.time.values[0]).replace('-','').replace(':','')[0:-14]
-        end_date_hour_f = str(xr_ds_hour_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+        start_date_hour_f = str(xr_ds_hour_f.time.values[0]).replace('-','').replace(':','')[0:-12]
+        end_date_hour_f = str(xr_ds_hour_f.time.values[-1]).replace('-','').replace(':','')[0:-12]
         savename_hour_f = dir_hour+'/'+file_hour+'_'+start_date_hour_f+'_'+end_date_hour_f+'.nc'
         print('saving '+savename_hour_f)
         xr_ds_hour_f.to_netcdf(savename_hour_f,encoding=encoding_f)
         
         #save daily data
-        start_date_day_f = str(xr_ds_day_f.time.values[0]).replace('-','').replace(':','')[0:-14]
-        end_date_day_f = str(xr_ds_day_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+        start_date_day_f = str(xr_ds_day_f.time.values[0]).replace('-','').replace(':','')[0:-12]
+        end_date_day_f = str(xr_ds_day_f.time.values[-1]).replace('-','').replace(':','')[0:-12]
         savename_day_f = dir_day+'/'+file_day+'_'+start_date_day_f+'_'+end_date_day_f+'.nc'
         print('saving '+savename_day_f)
         xr_ds_day_f.to_netcdf(savename_day_f,encoding=encoding_f)
@@ -203,8 +210,8 @@ def xr_ds_to_netcdf(xr_ds_hour_f,xr_ds_day_f,encoding_f,file_style_f,dir_hour_f,
             #save hourly data
             monthind_f = np.where(dates_hour_f.month == months_f[mo])[0]
             nc_month_hour_f = xr_ds_hour_f.isel(time=monthind_f)
-            start_date_hour_f = str(nc_month_hour_f.time.values[0]).replace('-','').replace(':','')[0:-14]
-            end_date_hour_f = str(nc_month_hour_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+            start_date_hour_f = str(nc_month_hour_f.time.values[0]).replace('-','').replace(':','')[0:-12]
+            end_date_hour_f = str(nc_month_hour_f.time.values[-1]).replace('-','').replace(':','')[0:-12]
             savename_hour_f = dir_hour+'/'+file_hour+'_'+start_date_hour_f+'_'+end_date_hour_f+'.nc'
             nc_month_hour_f.to_netcdf(savename_hour_f,encoding=encoding_f)
             nc_month_hour_f.close()
@@ -213,8 +220,8 @@ def xr_ds_to_netcdf(xr_ds_hour_f,xr_ds_day_f,encoding_f,file_style_f,dir_hour_f,
             #save daily data
             monthind_f = np.where(dates_day_f.month == months_f[mo])[0]
             nc_month_day_f = xr_ds_day_f.isel(time=monthind_f)
-            start_date_day_f = str(nc_month_day_f.time.values[0]).replace('-','').replace(':','')[0:-14]
-            end_date_day_f = str(nc_month_day_f.time.values[-1]).replace('-','').replace(':','')[0:-14]
+            start_date_day_f = str(nc_month_day_f.time.values[0]).replace('-','').replace(':','')[0:-12]
+            end_date_day_f = str(nc_month_day_f.time.values[-1]).replace('-','').replace(':','')[0:-12]
             savename_day_f = dir_day+'/'+file_day+'_'+start_date_day_f+'_'+end_date_day_f+'.nc'
             nc_month_day_f.to_netcdf(savename_day_f,encoding=encoding_f)
             nc_month_day_f.close()
@@ -225,4 +232,69 @@ def xr_ds_to_netcdf(xr_ds_hour_f,xr_ds_day_f,encoding_f,file_style_f,dir_hour_f,
     xr_ds_hour_f.close()
     xr_ds_day_f.close()
     del(xr_ds_hour_f,xr_ds_day_f)
-    
+
+
+def get_temporal_aggregation_metadata(variable_f,variable_unit_f,accumulation_f):
+    '''get metadata for a given variable, unit and temporal aggregation defined by <variable_f>, <variable_unit_f> and <accumulation_f>, all being character string'''
+    if variable_f == 'ssrd':
+        if accumulation_f == 'forward':
+            meta_hour_f = 'Accumulated flux data per second (in '+variable_unit_f+') assumed to be constant from hour h to h+1 (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
+            meta_day_f = 'Accumulated flux data per second (in '+variable_unit_f+') assumed to be constant from hour 00 to 24 UTC of day d, with d being indicated in the <time> dimension.'
+        elif accumulation_f == 'backward':
+            meta_hour_f = 'Accumulated flux data per second (in '+variable_unit_f+') assumed to be constant from hour h-1 to h (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
+            meta_day_f = 'Accumulated flux data per second (in '+variable_unit_f+') assumed to be constant from hour 23 UTC of day d-1 to hour 23 UTC of day d, with d being indicated in the <time> dimension.'
+        elif accumulation_f in ('centred','centered'):
+            meta_hour_f = 'Accumulated flux data per second (in '+variable_unit_f+') assumed to be constant from hour HH to HH+1 (e.g. from 00 to 01 UTC of a given day), with HH:30:00 UTC (e.g. 00:30:00) indicated in the <time> dimension.'
+            meta_day_f = 'Accumulated flux data per second (in '+variable_unit_f+') assumed to be constant from hour 00 to 24 UTC of day d, with 12:00:00 UTC indicated in the <time> dimension.'
+        else:
+            raise Exception('Error: Unknown entry for input parameter named <accumulation_f> !')
+    elif variable_f == 'pvpot':
+        if accumulation_f == 'forward':
+            meta_hour_f = 'hourly index data calculated upon rsds data from h to h+1 with h being the time instant indicated in the time dimension pointing to the start of the accumulation period. Underlying u10, v10 and tas are instantaneous values sampled at h.'
+            meta_day_f = 'daily mean of the hourly index data, valid for the time period 00 UTC to 24 UTC of day d, with d being indicated in the time dimension.'
+        elif accumulation_f == 'backward':
+            meta_hour_f = 'hourly index data calculated upon rsds data from h-1 to h with h being the time instant indicated in the time dimension pointing to the end of the accumulation period. Underlying u10, v10 and tas are instantaneous values sampled at h.'
+            meta_day_f = 'daily mean of the hourly index data, valid for the time period 23 UTC of day d-1 to 23 UTC of day d, with d being indicated in the time dimension.'
+        elif accumulation_f in ('centred','centered'):
+            meta_hour_f = 'hourly index data assumed to be constant from hour HH to HH+1 (e.g. from 00 to 01 UTC of a given day), with HH:30:00 UTC (e.g. 00:30:00) indicated in the <time> dimension.'
+            meta_day_f = 'daily mean of the hourly index data, accumulated from hour 00 to 24 UTC of day d, with 12:00:00 UTC indicated in the <time> dimension.'
+        else:
+            raise Exception('Error: Unknown entry for input parameter named <accumulation_f> !')
+    elif variable_f == 'tp':
+        if accumulation_f == 'forward':
+            meta_hour_f = 'Accumulated precipitation amount in '+variable_unit_f+' from hour h to h+1 (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
+            meta_day_f = 'Accumulated precipitation amount in '+variable_unit_f+' from hour 00 to 24 UTC of day d, with d being indicated in the <time> dimension.'
+        elif accumulation_f == 'backward':
+            meta_hour_f = 'Accumulated precipitation amount in '+variable_unit_f+' from hour h-1 to h (e.g. from 00 to 01 UTC of a given day), with h being indicated in the <time> dimension.'
+            meta_day_f = 'Accumulated precipitation amount in '+variable_unit_f+' from hour 23 UTC of day d-1 to hour 23 UTC of day d, with d being indicated in the <time> dimension.'
+        elif accumulation_f in ('centred','centered'):
+            meta_hour_f = 'Accumulated precipitation amount in '+variable_unit_f+' from hour HH to HH+1 (e.g. from 00 to 01 UTC of a given day), with HH:30:00 UTC (e.g. 00:30:00) indicated in the <time> dimension.'
+            meta_day_f = 'Accumulated precipitation amount in '+variable_unit_f+' from hour 00 to 24 UTC of day d, with 12:00:00 UTC indicated in the <time> dimension.'
+        else:
+            raise Exception('Error: Unknown entry for input parameter named <accumulation_f> !')
+    else:
+        raise Exception('ERROR: unknown entry for input parameter <variable_f> !')
+    return(meta_hour_f,meta_day_f)
+
+def center_dates(xr_ds_f,timescale_f):
+    ''' centers the dates along the time dimension in the input xarray dataset <xr_ds_f> to HH:30 for <timescale_f> = 'hourly' or to 12:00 for <timescale_f> = 'daily', respectively.'''
+    dates_hour_f = pd.DatetimeIndex(xr_ds_f.time.values)
+    if timescale_f == 'hour':
+        dates_transformed_f = pd.DatetimeIndex([dates_hour_f[ii].replace(minute=30) for ii in np.arange(len(dates_hour_f))]) #set hour from HH:00 to HH:30 format to indicate the centre of the accumulation period
+        time_unit_f = 'hours since '+str(dates_transformed_f[0]) #set the time units to be encoded below
+    elif timescale_f == 'day':
+        dates_transformed_f = pd.DatetimeIndex([dates_hour_f[ii].replace(hour=12) for ii in np.arange(len(dates_hour_f))]) #set hour 00 to hour 12 to indicate the centre of the accumulation period
+        time_unit_f = 'days since '+str(dates_transformed_f[0]) #set the time units to be encoded below
+    else:
+        raise Excpetion('ERROR: unknown entry for <timescale_f> !')
+    #time_unit_f = xr_ds_f.time.encoding['units'] #catch the time units passed to function via <xr_ds_f>
+    xr_ds_f = xr_ds_f.assign_coords({"time":dates_transformed_f}) #reassign time dimension
+    xr_ds_f = xr_ds_f.cf.add_bounds("time") # add time bounds https://cf-xarray.readthedocs.io/en/latest/generated/xarray.Dataset.cf.add_bounds.html
+
+    #xr_ds_f.time.attrs['units'] = time_unit_f 
+    xr_ds_f.time.attrs['standard_name'] = 'time'
+    xr_ds_f.time.encoding['units'] = time_unit_f #set the time unit of the newly generated/transformed time dimension, https://cfconventions.org/Data/cf-conventions/cf-conventions-1.7/build/ch04s04.html
+    #xr_ds_f.time_bounds.attrs['units'] = time_unit_f 
+    xr_ds_f.time_bounds.attrs['standard_name'] = 'time'
+    xr_ds_f.time_bounds.encoding['units'] = time_unit_f 
+    return(xr_ds_f)
